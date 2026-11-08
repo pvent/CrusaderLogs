@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "description": "Initial test definitions for the supplied custom TBC 2.5.3 log.",
+  "encounters": [
+    {
+      "name": "High King Maulgar",
+      "encounter_id": 649,
+      "instance_id": 565,
+      "zone_names": [
+        "Gruul's Lair"
+      ],
+      "start_targets": [
+        18831,
+        18832,
+        18834,
+        18835,
+        18836
+      ],
+      "members": [
+        {
+          "npc_id": 18831,
+          "name": "High King Maulgar"
+        },
+        {
+          "npc_id": 18832,
+          "name": "Krosh Firehand"
+        },
+        {
+          "npc_id": 18834,
+          "name": "Olm the Summoner"
+        },
+        {
+          "npc_id": 18835,
+          "name": "Kiggler the Crazed"
+        },
+        {
+          "npc_id": 18836,
+          "name": "Blindeye the Seer"
+        }
+      ],
+      "completion": {
+        "type": "all_members_dead"
+      }
+    },
+    {
+      "name": "Gruul the Dragonkiller",
+      "encounter_id": 650,
+      "instance_id": 565,
+      "zone_names": [
+        "Gruul's Lair"
+      ],
+      "start_targets": [
+        19044
+      ],
+      "members": [
+        {
+          "npc_id": 19044,
+          "name": "Gruul the Dragonkiller"
+        }
+      ],
+      "completion": {
+        "type": "all_members_dead"
+      }
+    }
+  ]
+}
