@@ -1,66 +1,309 @@
 {
   "schema_version": 1,
-  "description": "Initial test definitions for the supplied custom TBC 2.5.3 log.",
+  "description": "TBC raid encounters supported by the legacy gptParser roster.",
   "encounters": [
+    {
+      "name": "Attumen the Huntsman",
+      "encounter_id": 652,
+      "instance_id": 34,
+      "start_targets": ["Attumen the Huntsman", "Midnight"],
+      "members": ["Attumen the Huntsman", "Midnight"],
+      "completion": {
+        "type": "any_member_group_dead",
+        "any_member_groups": [["Attumen the Huntsman"]]
+      }
+    },
+    {
+      "name": "Moroes",
+      "encounter_id": 653,
+      "instance_id": 34,
+      "members": ["Moroes"]
+    },
+    {
+      "name": "Maiden of Virtue",
+      "encounter_id": 654,
+      "instance_id": 34,
+      "members": ["Maiden of Virtue"]
+    },
+    {
+      "name": "Opera Event",
+      "encounter_id": 655,
+      "instance_id": 34,
+      "start_targets": [
+        "Barnes", "The Big Bad Wolf", "Little Red Riding Hood",
+        "Julianne", "Romulo", "Romulo and Julianne", "Dorothee", "Tito",
+        "Roar", "Strawman", "Tinhead", "The Crone", "Wizard of Oz"
+      ],
+      "members": ["The Big Bad Wolf", "Romulo", "Julianne", "The Crone"],
+      "completion": {
+        "type": "any_member_group_dead",
+        "any_member_groups": [
+          ["The Big Bad Wolf"],
+          ["Romulo", "Julianne"],
+          ["The Crone"]
+        ]
+      }
+    },
+    {
+      "name": "The Curator",
+      "encounter_id": 656,
+      "instance_id": 34,
+      "members": ["The Curator"]
+    },
+    {
+      "name": "Terestian Illhoof",
+      "encounter_id": 657,
+      "instance_id": 34,
+      "members": ["Terestian Illhoof"]
+    },
+    {
+      "name": "Shade of Aran",
+      "encounter_id": 658,
+      "instance_id": 34,
+      "members": ["Shade of Aran"]
+    },
+    {
+      "name": "Netherspite",
+      "encounter_id": 659,
+      "instance_id": 34,
+      "members": ["Netherspite"]
+    },
+    {
+      "name": "Prince Malchezaar",
+      "encounter_id": 660,
+      "instance_id": 34,
+      "members": ["Prince Malchezaar"]
+    },
+    {
+      "name": "Nightbane",
+      "encounter_id": 661,
+      "instance_id": 34,
+      "members": ["Nightbane"]
+    },
     {
       "name": "High King Maulgar",
       "encounter_id": 649,
       "instance_id": 565,
-      "zone_names": [
-        "Gruul's Lair"
-      ],
-      "start_targets": [
-        18831,
-        18832,
-        18834,
-        18835,
-        18836
-      ],
       "members": [
-        {
-          "npc_id": 18831,
-          "name": "High King Maulgar"
-        },
-        {
-          "npc_id": 18832,
-          "name": "Krosh Firehand"
-        },
-        {
-          "npc_id": 18834,
-          "name": "Olm the Summoner"
-        },
-        {
-          "npc_id": 18835,
-          "name": "Kiggler the Crazed"
-        },
-        {
-          "npc_id": 18836,
-          "name": "Blindeye the Seer"
-        }
-      ],
-      "completion": {
-        "type": "all_members_dead"
-      }
+        "High King Maulgar", "Krosh Firehand", "Olm the Summoner",
+        "Kiggler the Crazed", "Blindeye the Seer"
+      ]
     },
     {
       "name": "Gruul the Dragonkiller",
       "encounter_id": 650,
       "instance_id": 565,
-      "zone_names": [
-        "Gruul's Lair"
-      ],
+      "members": ["Gruul the Dragonkiller"]
+    },
+    {
+      "name": "Magtheridon",
+      "encounter_id": 651,
+      "instance_id": 532,
+      "start_targets": ["Magtheridon", "Hellfire Channeler"],
+      "members": ["Magtheridon", "Hellfire Channeler"],
+      "completion": {
+        "type": "any_member_group_dead",
+        "any_member_groups": [["Magtheridon"]]
+      }
+    },
+    {
+      "name": "Hydross the Unstable",
+      "encounter_id": 624,
+      "instance_id": 548,
+      "members": ["Hydross the Unstable"]
+    },
+    {
+      "name": "The Lurker Below",
+      "encounter_id": 625,
+      "instance_id": 548,
+      "members": ["The Lurker Below"]
+    },
+    {
+      "name": "Leotheras the Blind",
+      "encounter_id": 626,
+      "instance_id": 548,
+      "members": ["Leotheras the Blind"]
+    },
+    {
+      "name": "Fathom-Lord Karathress",
+      "encounter_id": 627,
+      "instance_id": 548,
+      "members": [
+        "Fathom-Lord Karathress", "Fathom-Guard Tidalvess",
+        "Fathom-Guard Sharkkis", "Fathom-Guard Caribdis"
+      ]
+    },
+    {
+      "name": "Morogrim Tidewalker",
+      "encounter_id": 628,
+      "instance_id": 548,
+      "members": ["Morogrim Tidewalker"]
+    },
+    {
+      "name": "Lady Vashj",
+      "encounter_id": 629,
+      "instance_id": 548,
+      "members": ["Lady Vashj"]
+    },
+    {
+      "name": "Al'ar",
+      "encounter_id": 725,
+      "instance_id": 550,
+      "members": ["Al'ar"]
+    },
+    {
+      "name": "Void Reaver",
+      "encounter_id": 726,
+      "instance_id": 550,
+      "members": ["Void Reaver"]
+    },
+    {
+      "name": "High Astromancer Solarian",
+      "encounter_id": 727,
+      "instance_id": 550,
+      "members": ["High Astromancer Solarian"]
+    },
+    {
+      "name": "Kael'thas Sunstrider",
+      "encounter_id": 728,
+      "instance_id": 550,
       "start_targets": [
-        19044
+        "Kael'thas Sunstrider", "Thaladred the Darkener",
+        "Lord Sanguinar", "Grand Astromancer Capernian",
+        "Master Engineer Telonicus"
       ],
       "members": [
-        {
-          "npc_id": 19044,
-          "name": "Gruul the Dragonkiller"
-        }
+        "Kael'thas Sunstrider", "Thaladred the Darkener",
+        "Lord Sanguinar", "Grand Astromancer Capernian",
+        "Master Engineer Telonicus"
+      ]
+    },
+    {
+      "name": "Rage Winterchill",
+      "encounter_id": 618,
+      "instance_id": 534,
+      "members": ["Rage Winterchill"]
+    },
+    {
+      "name": "Anetheron",
+      "encounter_id": 619,
+      "instance_id": 534,
+      "members": ["Anetheron"]
+    },
+    {
+      "name": "Kaz'rogal",
+      "encounter_id": 620,
+      "instance_id": 534,
+      "members": ["Kaz'rogal"]
+    },
+    {
+      "name": "Azgalor",
+      "encounter_id": 621,
+      "instance_id": 534,
+      "members": ["Azgalor"]
+    },
+    {
+      "name": "Archimonde",
+      "encounter_id": 622,
+      "instance_id": 534,
+      "members": ["Archimonde"]
+    },
+    {
+      "name": "High Warlord Naj'entus",
+      "encounter_id": 601,
+      "instance_id": 564,
+      "members": ["High Warlord Naj'entus"]
+    },
+    {
+      "name": "Supremus",
+      "encounter_id": 602,
+      "instance_id": 564,
+      "members": ["Supremus"]
+    },
+    {
+      "name": "Shade of Akama",
+      "encounter_id": 603,
+      "instance_id": 564,
+      "members": ["Shade of Akama"]
+    },
+    {
+      "name": "Teron Gorefiend",
+      "encounter_id": 604,
+      "instance_id": 564,
+      "members": ["Teron Gorefiend"]
+    },
+    {
+      "name": "Gurtogg Bloodboil",
+      "encounter_id": 605,
+      "instance_id": 564,
+      "members": ["Gurtogg Bloodboil"]
+    },
+    {
+      "name": "Reliquary of Souls",
+      "encounter_id": 606,
+      "instance_id": 564,
+      "members": ["Reliquary of Souls"]
+    },
+    {
+      "name": "Mother Shahraz",
+      "encounter_id": 607,
+      "instance_id": 564,
+      "members": ["Mother Shahraz"]
+    },
+    {
+      "name": "The Illidari Council",
+      "encounter_id": 608,
+      "instance_id": 564,
+      "start_targets": [
+        "The Illidari Council", "Gathios the Shatterer",
+        "High Nethermancer Zerevor", "Lady Malande", "Veras Darkshadow"
       ],
-      "completion": {
-        "type": "all_members_dead"
-      }
+      "members": [
+        "Gathios the Shatterer", "High Nethermancer Zerevor",
+        "Lady Malande", "Veras Darkshadow"
+      ]
+    },
+    {
+      "name": "Illidan Stormrage",
+      "encounter_id": 609,
+      "instance_id": 564,
+      "members": ["Illidan Stormrage"]
+    },
+    {
+      "name": "Nalorakk",
+      "encounter_id": 1189,
+      "instance_id": 568,
+      "members": ["Nalorakk"]
+    },
+    {
+      "name": "Akil'zon",
+      "encounter_id": 1190,
+      "instance_id": 568,
+      "members": ["Akil'zon"]
+    },
+    {
+      "name": "Jan'alai",
+      "encounter_id": 1191,
+      "instance_id": 568,
+      "members": ["Jan'alai"]
+    },
+    {
+      "name": "Halazzi",
+      "encounter_id": 1192,
+      "instance_id": 568,
+      "members": ["Halazzi"]
+    },
+    {
+      "name": "Hex Lord Malacrass",
+      "encounter_id": 1193,
+      "instance_id": 568,
+      "members": ["Hex Lord Malacrass"]
+    },
+    {
+      "name": "Zul'jin",
+      "encounter_id": 1194,
+      "instance_id": 568,
+      "members": ["Zul'jin"]
     }
   ]
 }

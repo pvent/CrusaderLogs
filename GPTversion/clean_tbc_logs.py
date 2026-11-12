@@ -267,7 +267,9 @@ def parse_log(path: Path, normalize_names: bool) -> tuple[list[Event], dict[str,
 
 def load_definitions(path: Optional[Path]) -> dict[str, Any]:
     if path is None:
-        return DEFAULT_DEFINITIONS
+        path = Path(__file__).with_name("tbc_encounters.json")
+        if not path.exists():
+            return DEFAULT_DEFINITIONS
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
     if not isinstance(data, dict) or not isinstance(data.get("encounters"), list):
@@ -275,29 +277,56 @@ def load_definitions(path: Optional[Path]) -> dict[str, Any]:
     return data
 
 
-def event_member_matches(event: Event, member: dict[str, Any]) -> bool:
-    npc_id = member.get("npc_id")
-    name = member.get("name")
+def member_npc_id(member: Any) -> Optional[int]:
+    if isinstance(member, dict) and member.get("npc_id") is not None:
+        return int(member["npc_id"])
+    return None
+
+
+def member_name(member: Any) -> Optional[str]:
+    if isinstance(member, str):
+        return member
+    if isinstance(member, dict) and member.get("name"):
+        return str(member["name"])
+    return None
+
+
+def event_member_matches(event: Event, member: Any) -> bool:
+    npc_id = member_npc_id(member)
+    name = member_name(member)
     source_id = extract_npc_id(event.source_guid)
     dest_id = extract_npc_id(event.dest_guid)
-    if npc_id is not None and (source_id == int(npc_id) or dest_id == int(npc_id)):
+    if npc_id is not None and (source_id == npc_id or dest_id == npc_id):
         return True
     return bool(name and (event.source_name == name or event.dest_name == name))
 
 
-def event_is_hard_combat(event: Event, member_by_key: list[dict[str, Any]]) -> bool:
+def event_is_hard_combat(event: Event, member_by_key: list[Any]) -> bool:
     return bool(event.event_type in HARD_COMBAT_EVENTS and any(event_member_matches(event, m) for m in member_by_key))
 
 
-def find_start(events: list[Event], definition: dict[str, Any], confirm_window: float) -> Optional[int]:
+def find_start(events: list[Event], definition: dict[str, Any], confirm_window: float,
+               zone_instances: Optional[list[Optional[int]]] = None) -> Optional[int]:
     members = definition["members"]
-    start_ids = {int(x) for x in definition.get("start_targets", [])}
-    start_names = {m.get("name") for m in members if m.get("npc_id") in start_ids}
+    start_targets = definition.get("start_targets", [])
+    start_ids = {int(x) for x in start_targets if isinstance(x, int)}
+    start_names = {str(x) for x in start_targets if isinstance(x, str)}
+    if not start_targets:
+        start_names.update(name for member in members if (name := member_name(member)))
+    for member in members:
+        if member_npc_id(member) in start_ids:
+            name = member_name(member)
+            if name:
+                start_names.add(name)
+    instance_id = int(definition["instance_id"])
 
     candidates: list[int] = []
     hard_indices: list[int] = []
     for idx, event in enumerate(events):
         if event.timestamp is None or event.event_type is None:
+            continue
+        event_instance = zone_instances[idx] if zone_instances is not None else None
+        if event_instance is not None and event_instance != instance_id:
             continue
         source_id = extract_npc_id(event.source_guid)
         dest_id = extract_npc_id(event.dest_guid)
@@ -316,6 +345,9 @@ def find_start(events: list[Event], definition: dict[str, Any], confirm_window: 
         candidate_time = events[candidate_idx].timestamp
         assert candidate_time is not None
         for hard_idx in hard_indices:
+            hard_instance = zone_instances[hard_idx] if zone_instances is not None else None
+            if hard_instance is not None and hard_instance != instance_id:
+                continue
             hard_time = events[hard_idx].timestamp
             if hard_time is None:
                 continue
@@ -325,59 +357,85 @@ def find_start(events: list[Event], definition: dict[str, Any], confirm_window: 
     return None
 
 
-def get_death_member(event: Event, members: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+def get_death_member(event: Event, members: list[Any]) -> Optional[Any]:
     if event.event_type != "UNIT_DIED":
         return None
     # UNIT_DIED uses null source fields followed by the dead unit in destination columns.
     dead_id = extract_npc_id(event.dest_guid)
     for member in members:
-        if dead_id is not None and member.get("npc_id") is not None and dead_id == int(member["npc_id"]):
+        member_id = member_npc_id(member)
+        name = member_name(member)
+        if dead_id is not None and member_id is not None and dead_id == member_id:
             return member
-        if member.get("name") and event.dest_name == member["name"]:
+        if name and event.dest_name == name:
             return member
     return None
 
 
 def detect_encounters(events: list[Event], definitions: dict[str, Any], confirm_window: float,
-                      zone_instance: Optional[int]) -> list[EncounterResult]:
+                      zone_instances: Optional[list[Optional[int]]] = None) -> list[EncounterResult]:
     results: list[EncounterResult] = []
     for definition in definitions["encounters"]:
         instance_id = int(definition["instance_id"])
-        if zone_instance is not None and instance_id != zone_instance:
-            continue
-        start_index = find_start(events, definition, confirm_window)
+        start_index = find_start(events, definition, confirm_window, zone_instances)
         if start_index is None:
             continue
 
         start_event = events[start_index]
         assert start_event.timestamp is not None
         members = definition["members"]
-        required_ids = {int(m["npc_id"]) for m in members if m.get("npc_id") is not None}
-        deaths_by_id: dict[int, dict[str, Any]] = {}
-        seen_guids: dict[str, set[str]] = {str(m.get("npc_id", m.get("name"))): set() for m in members}
+        member_keys = [
+            str(member_npc_id(member) or member_name(member) or index)
+            for index, member in enumerate(members)
+        ]
+        required_keys = set(member_keys)
+        deaths_by_member: dict[str, dict[str, Any]] = {}
+        seen_guids: dict[str, set[str]] = {key: set() for key in member_keys}
+        completion = definition.get("completion", {})
+        completion_type = completion.get("type", "all_members_dead")
+        completion_groups = completion.get("any_member_groups", [])
+        name_to_key = {
+            member_name(member): member_keys[member_idx]
+            for member_idx, member in enumerate(members)
+            if member_name(member)
+        }
         for idx in range(start_index, len(events)):
             event = events[idx]
-            for member in members:
-                key = str(member.get("npc_id", member.get("name")))
+            for member_idx, member in enumerate(members):
+                key = member_keys[member_idx]
+                npc_id = member_npc_id(member)
+                expected_name = member_name(member)
                 for guid, name in ((event.source_guid, event.source_name), (event.dest_guid, event.dest_name)):
-                    if ((member.get("npc_id") is not None and extract_npc_id(guid) == int(member["npc_id"])) or
-                            (member.get("name") and name == member["name"])):
+                    if ((npc_id is not None and extract_npc_id(guid) == npc_id) or
+                            (expected_name and name == expected_name)):
                         if guid and guid != "0000000000000000":
                             seen_guids[key].add(guid)
             dead_member = get_death_member(event, members)
             if dead_member and event.timestamp and event.timestamp >= start_event.timestamp:
-                npc_id = int(dead_member["npc_id"]) if dead_member.get("npc_id") is not None else -1
-                if npc_id not in deaths_by_id:
-                    deaths_by_id[npc_id] = {
-                        "npc_id": npc_id, "name": dead_member.get("name"),
+                dead_member_idx = next(i for i, member in enumerate(members) if member is dead_member)
+                key = member_keys[dead_member_idx]
+                if key not in deaths_by_member:
+                    deaths_by_member[key] = {
+                        "npc_id": member_npc_id(dead_member), "name": member_name(dead_member),
                         "guid": event.dest_guid, "timestamp": event.timestamp_text,
                         "line": event.line_number,
                     }
 
-            completion_type = definition.get("completion", {}).get("type", "all_members_dead")
-            if completion_type == "all_members_dead" and required_ids and required_ids.issubset(deaths_by_id.keys()):
+            group_completed = any(
+                set(name_to_key[name] for name in group if name in name_to_key).issubset(deaths_by_member)
+                and all(name in name_to_key for name in group)
+                for group in completion_groups
+            )
+            completed = (
+                completion_type == "all_members_dead" and required_keys.issubset(deaths_by_member)
+            ) or (
+                completion_type == "any_member_dead" and bool(deaths_by_member)
+            ) or (
+                completion_type == "any_member_group_dead" and group_completed
+            )
+            if completed:
                 # The final required death is the completion timestamp.
-                final_death = max(deaths_by_id.values(), key=lambda item: item["line"])
+                final_death = max(deaths_by_member.values(), key=lambda item: item["line"])
                 end_index = next(i for i in range(start_index, idx + 1)
                                  if events[i].line_number == final_death["line"])
                 end_event = events[end_index]
@@ -388,8 +446,8 @@ def detect_encounters(events: list[Event], definitions: dict[str, Any], confirm_
                     start_timestamp=start_event.timestamp, start_line_number=start_event.line_number,
                     end_index=end_index, end_timestamp=end_event.timestamp, end_line_number=end_event.line_number,
                     status="completed", completion_rule=completion_type,
-                    required_members=[m.get("name", str(m.get("npc_id"))) for m in members],
-                    confirmed_deaths=list(deaths_by_id.values()),
+                    required_members=[member_name(m) or str(member_npc_id(m)) for m in members],
+                    confirmed_deaths=list(deaths_by_member.values()),
                     seen_member_guids={k: sorted(v) for k, v in seen_guids.items()}, warnings=[]
                 ))
                 break
@@ -399,13 +457,26 @@ def detect_encounters(events: list[Event], definitions: dict[str, Any], confirm_
                 instance_id=instance_id, start_index=start_index,
                 start_timestamp=start_event.timestamp, start_line_number=start_event.line_number,
                 end_index=None, end_timestamp=None, end_line_number=None,
-                status="incomplete_no_required_death_sequence", completion_rule=definition.get("completion", {}).get("type", "all_members_dead"),
-                required_members=[m.get("name", str(m.get("npc_id"))) for m in members],
-                confirmed_deaths=list(deaths_by_id.values()),
+                status="incomplete_no_required_death_sequence", completion_rule=completion_type,
+                required_members=[member_name(m) or str(member_npc_id(m)) for m in members],
+                confirmed_deaths=list(deaths_by_member.values()),
                 seen_member_guids={k: sorted(v) for k, v in seen_guids.items()},
                 warnings=["No complete required-member death sequence was found; no successful ENCOUNTER_END was generated."]
             ))
     return sorted(results, key=lambda result: result.start_index)
+
+
+def get_zone_instances(events: list[Event]) -> list[Optional[int]]:
+    instances: list[Optional[int]] = []
+    current_instance: Optional[int] = None
+    for event in events:
+        if event.event_type == "ZONE_CHANGE" and event.fields and len(event.fields) > 1:
+            try:
+                current_instance = int(event.fields[1])
+            except ValueError:
+                current_instance = None
+        instances.append(current_instance)
+    return instances
 
 
 def get_zone_instance(diagnostics: dict[str, Any]) -> Optional[int]:
@@ -497,11 +568,11 @@ def main() -> int:
     parser.add_argument("--no-name-normalization", action="store_true",
                          help="Do not remove the observed trailing '-' from Player GUID names")
     parser.add_argument("--write-default-definitions", type=Path,
-                         help="Write the built-in Maulgar/Gruul definitions to this JSON file and exit")
+                         help="Write the default encounter definitions to this JSON file and exit")
     args = parser.parse_args()
 
     if args.write_default_definitions:
-        args.write_default_definitions.write_text(json.dumps(DEFAULT_DEFINITIONS, indent=2), encoding="utf-8")
+        args.write_default_definitions.write_text(json.dumps(load_definitions(None), indent=2), encoding="utf-8")
         print(f"Wrote definitions: {args.write_default_definitions}")
         return 0
 
@@ -516,8 +587,9 @@ def main() -> int:
 
     definitions = load_definitions(args.definitions)
     events, diagnostics = parse_log(args.input, normalize_names=not args.no_name_normalization)
+    zone_instances = get_zone_instances(events)
     zone_instance = get_zone_instance(diagnostics)
-    encounters = detect_encounters(events, definitions, args.confirm_window_seconds, zone_instance)
+    encounters = detect_encounters(events, definitions, args.confirm_window_seconds, zone_instances)
     output_lines, output_counts = build_output(
         events, encounters, args.purge, args.pre_pull_seconds, args.post_pull_seconds,
         args.difficulty, args.group_size)
@@ -527,6 +599,7 @@ def main() -> int:
         "output": str(output_path), "diagnostics_report": str(report_path),
         "purge_enabled": args.purge, "name_normalization_enabled": not args.no_name_normalization,
         "zone_instance_id_used": zone_instance, "difficulty_written": args.difficulty,
+        "zone_instance_ids_seen": sorted({x for x in zone_instances if x is not None}),
         "group_size_written": args.group_size, "output_counts": output_counts,
         "encounters": [serialize_encounter(encounter, events) for encounter in encounters],
         "encounter_counts": {
@@ -537,7 +610,7 @@ def main() -> int:
         "notes": [
             "Only completed encounters receive synthetic ENCOUNTER_START/ENCOUNTER_END pairs.",
             "An encounter without all required UNIT_DIED records is reported as incomplete; success is not guessed.",
-            "The built-in definitions currently cover High King Maulgar and Gruul only.",
+            "The default encounter definitions are loaded from tbc_encounters.json beside this script.",
             "Player-name normalization removes one trailing hyphen only for Player- GUID source/destination names.",
         ],
     })
