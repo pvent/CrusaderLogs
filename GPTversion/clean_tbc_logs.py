@@ -166,17 +166,30 @@ def normalize_player_names(fields: list[str]) -> tuple[list[str], list[dict[str,
 
 
 def pass_one_build_pet_registry(events: list[Event]) -> dict[str, dict[str, str]]:
-    """Map summoned pet GUIDs to the summoning unit's GUID and name."""
+    """Map pet GUIDs to owners using summon and Spirit Bond events."""
     pet_to_owner: dict[str, dict[str, str]] = {}
     for event in events:
-        if event.event_type not in {"SPELL_SUMMON", "GHOST_SUMMON"}:
-            continue
-        if not event.source_guid or not event.dest_guid:
-            continue
-        pet_to_owner[event.dest_guid] = {
-            "guid": event.source_guid,
-            "name": event.source_name,
-        }
+        if event.event_type in {"SPELL_SUMMON", "GHOST_SUMMON"}:
+            if event.source_guid and event.dest_guid:
+                pet_to_owner[event.dest_guid] = {
+                    "guid": event.source_guid,
+                    "name": event.source_name,
+                }
+
+    for event in events:
+        if (
+            event.event_type == "SPELL_PERIODIC_HEAL"
+            and event.source_guid.startswith("Pet-")
+            and event.dest_guid.startswith("Player-")
+            and event.fields is not None
+            and len(event.fields) > 10
+            and event.fields[9] == "24529"
+            and event.fields[10] == "Spirit Bond"
+        ):
+            pet_to_owner.setdefault(event.source_guid, {
+                "guid": event.dest_guid,
+                "name": event.dest_name,
+            })
     return pet_to_owner
 
 

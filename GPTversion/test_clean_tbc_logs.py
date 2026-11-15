@@ -50,6 +50,25 @@ class PetOwnerAssignmentTests(unittest.TestCase):
         self.assertIn('Creature-0-1-0-0-19044-000000000001,"Gruul the Dragonkiller"', pet_attack.output_line)
         self.assertEqual(diagnostics["pet_event_rewrites"], 1)
 
+    def test_spirit_bond_links_pet_to_hunter_without_summon_event(self):
+        combat_log = """\
+11/12 13:15:00.000  SPELL_PERIODIC_HEAL,Pet-0-1-0-0-1509702-0000000003,"Udon",0x1114,0x0,Player-1-00004216,"Caryoptera-",0x514,0x0,24529,"Spirit Bond",0x8,0000000000000000,0000000000000000,0,0,0,0,0,-1,0,0,0,0.00,0.00,330,0.0000,0,160,160,0,0,nil
+11/12 13:15:01.000  SPELL_DAMAGE,Pet-0-1-0-0-1509702-0000000003,"Udon",0x1114,0x0,Creature-0-1-0-0-19044-000000000001,"Gruul the Dragonkiller",0x10a48,0x0,25012,"Lightning Breath",0x8,0000000000000000,0000000000000000,0,0,0,0,0,-1,0,0,0,0.00,0.00,330,0.0000,0,201,201,-1,8,0,0,0
+"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "tbc.log"
+            log_path.write_text(combat_log, encoding="utf-8")
+            events, diagnostics = parse_log(log_path, normalize_names=True)
+
+        pet_attack = events[1]
+        self.assertEqual(pet_attack.source_guid, "Player-1-00004216")
+        self.assertEqual(pet_attack.source_name, "Caryoptera")
+        self.assertIn("SPELL_DAMAGE,Player-1-00004216,Caryoptera,", pet_attack.output_line)
+        self.assertEqual(
+            diagnostics["pet_owner_mappings"]["Pet-0-1-0-0-1509702-0000000003"],
+            {"guid": "Player-1-00004216", "name": "Caryoptera"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
