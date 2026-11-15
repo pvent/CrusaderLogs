@@ -166,9 +166,13 @@ def normalize_player_names(fields: list[str]) -> tuple[list[str], list[dict[str,
 
 
 def pass_one_build_pet_registry(events: list[Event]) -> dict[str, dict[str, str]]:
-    """Map pet GUIDs to owners using summon and Spirit Bond events."""
+    """Map pets using summon, owner-specific effects, and stable pet GUID identities."""
     pet_to_owner: dict[str, dict[str, str]] = {}
+    pet_names: dict[str, set[str]] = {}
     for event in events:
+        for guid, name in ((event.source_guid, event.source_name), (event.dest_guid, event.dest_name)):
+            if guid.startswith("Pet-"):
+                pet_names.setdefault(guid, set()).add(name)
         if event.event_type in {"SPELL_SUMMON", "GHOST_SUMMON"}:
             if event.source_guid and event.dest_guid:
                 pet_to_owner[event.dest_guid] = {
@@ -176,20 +180,55 @@ def pass_one_build_pet_registry(events: list[Event]) -> dict[str, dict[str, str]
                     "name": event.source_name,
                 }
 
+    owner_link_events = {
+        ("SPELL_AURA_APPLIED", "19574", "Bestial Wrath"),
+        ("SPELL_AURA_APPLIED", "19577", "Intimidation"),
+        ("SPELL_AURA_APPLIED", "27046", "Mend Pet"),
+        ("SPELL_PERIODIC_HEAL", "27046", "Mend Pet"),
+        ("SPELL_AURA_APPLIED", "1539", "Feed Pet Effect"),
+        ("SPELL_ENERGIZE", "1539", "Feed Pet Effect"),
+        ("SPELL_PERIODIC_ENERGIZE", "1539", "Feed Pet Effect"),
+        ("SPELL_ENERGIZE", "34953", "Go for the Throat"),
+        ("SPELL_AURA_APPLIED", "19028", "Soul Link"),
+        ("SPELL_AURA_APPLIED", "25228", "Soul Link"),
+    }
+    pet_owner_events = {
+        ("SPELL_ENERGIZE", "34650", "Mana Leech"),
+        ("SPELL_INSTAKILL", "18788", "Demonic Sacrifice"),
+        ("SPELL_PERIODIC_HEAL", "24529", "Spirit Bond"),
+    }
     for event in events:
-        if (
-            event.event_type == "SPELL_PERIODIC_HEAL"
-            and event.source_guid.startswith("Pet-")
-            and event.dest_guid.startswith("Player-")
-            and event.fields is not None
-            and len(event.fields) > 10
-            and event.fields[9] == "24529"
-            and event.fields[10] == "Spirit Bond"
-        ):
+        if event.fields is None or len(event.fields) <= 10:
+            continue
+        spell_event = (event.event_type, event.fields[9], event.fields[10])
+        if (event.source_guid.startswith("Player-")
+                and event.dest_guid.startswith("Pet-")
+                and spell_event in owner_link_events):
+            pet_to_owner.setdefault(event.dest_guid, {
+                "guid": event.source_guid,
+                "name": event.source_name,
+            })
+        elif (event.source_guid.startswith("Pet-")
+              and event.dest_guid.startswith("Player-")
+              and spell_event in pet_owner_events):
             pet_to_owner.setdefault(event.source_guid, {
                 "guid": event.dest_guid,
                 "name": event.dest_name,
             })
+
+    owners_by_pet_identity: dict[str, set[tuple[str, str]]] = {}
+    for pet_guid, owner in pet_to_owner.items():
+        if pet_guid.startswith("Pet-"):
+            identity = pet_guid.rsplit("-", 1)[0]
+            owners_by_pet_identity.setdefault(identity, set()).add((owner["guid"], owner["name"]))
+    for pet_guid in pet_names:
+        if pet_guid in pet_to_owner:
+            continue
+        owners = owners_by_pet_identity.get(pet_guid.rsplit("-", 1)[0], set())
+        if len(owners) == 1:
+            owner_guid, owner_name = next(iter(owners))
+            pet_to_owner[pet_guid] = {"guid": owner_guid, "name": owner_name}
+
     return pet_to_owner
 
 
@@ -344,6 +383,15 @@ def parse_log(path: Path, normalize_names: bool) -> tuple[list[Event], dict[str,
     diagnostics["name_change_occurrences"] = sum(x["occurrence_count"] for x in diagnostics["name_changes"])
     pet_to_owner = pass_one_build_pet_registry(events)
     diagnostics["pet_owner_mappings"] = pet_to_owner
+    pet_names_by_guid: dict[str, set[str]] = {}
+    for event in events:
+        for guid, name in ((event.source_guid, event.source_name), (event.dest_guid, event.dest_name)):
+            if guid.startswith("Pet-"):
+                pet_names_by_guid.setdefault(guid, set()).add(name)
+    diagnostics["unmapped_pet_guids"] = [
+        {"guid": guid, "names": sorted(pet_names_by_guid[guid])}
+        for guid in sorted(pet_names_by_guid.keys() - pet_to_owner.keys())
+    ]
     diagnostics["pet_event_rewrites"] = sum(rewrite_pet_events(event, pet_to_owner) for event in events)
     diagnostics["event_types_seen"] = len(known_types)
     return events, diagnostics
@@ -706,6 +754,10 @@ def main() -> int:
     print(f"Parsed timestamped events: {diagnostics['timestamped_events']}")
     print(f"Malformed lines: {len(diagnostics['malformed_lines'])}")
     print(f"Player-name mappings: {len(diagnostics['name_changes'])} ({diagnostics['name_change_occurrences']} occurrences)")
+    print(f"Pet owner mappings: {len(diagnostics['pet_owner_mappings'])}")
+    for pet in diagnostics["unmapped_pet_guids"]:
+        names = ", ".join(name for name in pet["names"] if name)
+        print(f"  WARNING: no owner link for pet {pet['guid']} ({names or 'unknown name'})")
     print(f"Encounter candidates: {diagnostics['encounter_counts']['detected']}")
     for encounter in encounters:
         duration = f"{encounter.duration_ms} ms" if encounter.duration_ms is not None else "unknown"
