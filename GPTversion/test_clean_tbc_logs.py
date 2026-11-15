@@ -32,5 +32,24 @@ class EncounterDefinitionsTests(unittest.TestCase):
         )
 
 
+class PetOwnerAssignmentTests(unittest.TestCase):
+    def test_summoned_pet_events_use_owner_source_identity(self):
+        combat_log = """\
+11/12 13:15:00.000  SPELL_SUMMON,Player-1-00000001,"Hunter",0x511,0x0,Pet-0-0-0-0-00000001,"Wolf",0xa48,0x0,123,1
+11/12 13:15:01.000  SPELL_DAMAGE,Pet-0-0-0-0-00000001,"Wolf",0xa48,0x0,Creature-0-1-0-0-19044-000000000001,"Gruul the Dragonkiller",0x10a48,0x0,1,"Hit",0x1,100,100,0,0,0,0
+"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "tbc.log"
+            log_path.write_text(combat_log, encoding="utf-8")
+            events, diagnostics = parse_log(log_path, normalize_names=False)
+
+        pet_attack = events[1]
+        self.assertEqual(pet_attack.source_guid, "Player-1-00000001")
+        self.assertEqual(pet_attack.source_name, "Hunter")
+        self.assertIn("SPELL_DAMAGE,Player-1-00000001,Hunter,", pet_attack.output_line)
+        self.assertIn('Creature-0-1-0-0-19044-000000000001,"Gruul the Dragonkiller"', pet_attack.output_line)
+        self.assertEqual(diagnostics["pet_event_rewrites"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

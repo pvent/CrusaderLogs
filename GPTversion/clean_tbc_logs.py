@@ -165,6 +165,74 @@ def normalize_player_names(fields: list[str]) -> tuple[list[str], list[dict[str,
     return result, changed
 
 
+def pass_one_build_pet_registry(events: list[Event]) -> dict[str, dict[str, str]]:
+    """Map summoned pet GUIDs to the summoning unit's GUID and name."""
+    pet_to_owner: dict[str, dict[str, str]] = {}
+    for event in events:
+        if event.event_type not in {"SPELL_SUMMON", "GHOST_SUMMON"}:
+            continue
+        if not event.source_guid or not event.dest_guid:
+            continue
+        pet_to_owner[event.dest_guid] = {
+            "guid": event.source_guid,
+            "name": event.source_name,
+        }
+    return pet_to_owner
+
+
+def replace_csv_fields(payload: str, replacements: dict[int, str]) -> str:
+    """Replace selected CSV fields while leaving all other source text intact."""
+    spans: list[tuple[int, int]] = []
+    field_start = 0
+    in_quotes = False
+    index = 0
+    while index < len(payload):
+        character = payload[index]
+        if character == '"':
+            if in_quotes and index + 1 < len(payload) and payload[index + 1] == '"':
+                index += 1
+            else:
+                in_quotes = not in_quotes
+        elif character == "," and not in_quotes:
+            spans.append((field_start, index))
+            field_start = index + 1
+        index += 1
+    spans.append((field_start, len(payload)))
+
+    updated = payload
+    for field_index, value in sorted(replacements.items(), reverse=True):
+        if field_index >= len(spans):
+            continue
+        start, end = spans[field_index]
+        updated = updated[:start] + csv_payload([value]) + updated[end:]
+    return updated
+
+
+def rewrite_pet_events(event: Event, pet_to_owner: dict[str, dict[str, str]]) -> bool:
+    """Replace a pet event's source identity with its registered owner's."""
+    owner = pet_to_owner.get(event.source_guid)
+    if owner is None or event.fields is None or len(event.fields) <= 2:
+        return False
+
+    line = event.output_line
+    line_body = line.rstrip("\r\n")
+    line_ending = line[len(line_body):]
+    match = TIMESTAMP_RE.match(line_body)
+    fields = parse_csv_payload(match.group(2)) if match is not None else list(event.fields)
+    if len(fields) <= 2:
+        return False
+    fields[1] = owner["guid"]
+    fields[2] = owner["name"]
+    event.fields = fields
+    event.source_guid = owner["guid"]
+    event.source_name = owner["name"]
+
+    if match is not None:
+        payload = replace_csv_fields(match.group(2), {1: owner["guid"], 2: owner["name"]})
+        event.normalized_line = line_body[:match.start(2)] + payload + line_ending
+    return True
+
+
 def parse_log(path: Path, normalize_names: bool) -> tuple[list[Event], dict[str, Any]]:
     events: list[Event] = []
     diagnostics: dict[str, Any] = {
@@ -261,6 +329,9 @@ def parse_log(path: Path, normalize_names: bool) -> tuple[list[Event], dict[str,
         for item in grouped_changes.values()
     ]
     diagnostics["name_change_occurrences"] = sum(x["occurrence_count"] for x in diagnostics["name_changes"])
+    pet_to_owner = pass_one_build_pet_registry(events)
+    diagnostics["pet_owner_mappings"] = pet_to_owner
+    diagnostics["pet_event_rewrites"] = sum(rewrite_pet_events(event, pet_to_owner) for event in events)
     diagnostics["event_types_seen"] = len(known_types)
     return events, diagnostics
 
