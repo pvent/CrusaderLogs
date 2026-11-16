@@ -437,8 +437,7 @@ def event_is_hard_combat(event: Event, member_by_key: list[Any]) -> bool:
     return bool(event.event_type in HARD_COMBAT_EVENTS and any(event_member_matches(event, m) for m in member_by_key))
 
 
-def find_start(events: list[Event], definition: dict[str, Any], confirm_window: float,
-               zone_instances: Optional[list[Optional[int]]] = None) -> Optional[int]:
+def find_start(events: list[Event], definition: dict[str, Any], confirm_window: float) -> Optional[int]:
     members = definition["members"]
     start_targets = definition.get("start_targets", [])
     start_ids = {int(x) for x in start_targets if isinstance(x, int)}
@@ -457,9 +456,6 @@ def find_start(events: list[Event], definition: dict[str, Any], confirm_window: 
     for idx, event in enumerate(events):
         if event.timestamp is None or event.event_type is None:
             continue
-        event_instance = zone_instances[idx] if zone_instances is not None else None
-        if event_instance is not None and event_instance != instance_id:
-            continue
         source_id = extract_npc_id(event.source_guid)
         dest_id = extract_npc_id(event.dest_guid)
         involves_start = (source_id in start_ids or dest_id in start_ids or
@@ -477,9 +473,6 @@ def find_start(events: list[Event], definition: dict[str, Any], confirm_window: 
         candidate_time = events[candidate_idx].timestamp
         assert candidate_time is not None
         for hard_idx in hard_indices:
-            hard_instance = zone_instances[hard_idx] if zone_instances is not None else None
-            if hard_instance is not None and hard_instance != instance_id:
-                continue
             hard_time = events[hard_idx].timestamp
             if hard_time is None:
                 continue
@@ -504,12 +497,12 @@ def get_death_member(event: Event, members: list[Any]) -> Optional[Any]:
     return None
 
 
-def detect_encounters(events: list[Event], definitions: dict[str, Any], confirm_window: float,
-                      zone_instances: Optional[list[Optional[int]]] = None) -> list[EncounterResult]:
+def detect_encounters(events: list[Event], definitions: dict[str, Any],
+                      confirm_window: float) -> list[EncounterResult]:
     results: list[EncounterResult] = []
     for definition in definitions["encounters"]:
         instance_id = int(definition["instance_id"])
-        start_index = find_start(events, definition, confirm_window, zone_instances)
+        start_index = find_start(events, definition, confirm_window)
         if start_index is None:
             continue
 
@@ -721,7 +714,7 @@ def main() -> int:
     events, diagnostics = parse_log(args.input, normalize_names=not args.no_name_normalization)
     zone_instances = get_zone_instances(events)
     zone_instance = get_zone_instance(diagnostics)
-    encounters = detect_encounters(events, definitions, args.confirm_window_seconds, zone_instances)
+    encounters = detect_encounters(events, definitions, args.confirm_window_seconds)
     output_lines, output_counts = build_output(
         events, encounters, args.purge, args.pre_pull_seconds, args.post_pull_seconds,
         args.difficulty, args.group_size)
